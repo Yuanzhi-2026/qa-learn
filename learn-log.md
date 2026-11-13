@@ -1,0 +1,25 @@
+# learn-log · qa-learn
+
+## 若依管理系统 接口自动化测试
+
+**2026-11-13 · 20 passed**（登录 2 + 测试模块用户 6 + 系统只读 9 + 系统用户 CRUD 3）
+
+**环境**：Python 3.11.15（uv venv）｜pytest 9.2.0｜requests 2.34.2｜pytest-html 4.2.0｜被测 RuoYi 3.9.2 @ 127.0.0.1:8080（`java -jar ruoyi-admin.jar` 启动，需 MySQL + Redis 已运行）
+
+**踩过的坑**
+1. `BASE_URL + path` 是纯拼接，path 必须 `/` 开头，否则 `'127.0.0.1:8080system' is not a valid host`
+2. `GET /system/user/list` 是 `like` 模糊匹配，`rows[0]` 不保证是目标用户 → 断言 `total == 1`
+3. `POST /system/user` 不返回新 ID → 必须回查列表；且 `userName` 大小写敏感，写错静默返回全量
+4. `PUT /system/user` 全量更新，省略 `deptId` 会被清空为 null 且返回成功 → 先 GET 详情再整对象 PUT
+5. `userName`（登录名）不可修改，传了也忽略，但返回"操作成功"
+6. 删除是逻辑删除：详情仍返回 `delFlag='2'`，列表已过滤；`DELETE` 不存在的 id 也返回成功
+7. **fixture 在 `yield` 之前抛异常 → 清理代码永不执行 → 库里残留垃圾数据**（本轮出现 3 次，已手工清理）
+
+**还没掌握的**
+- fixture 失败时如何保证清理（`request.addfinalizer` / `try-finally`）
+- 响应体分层：`body`（含 code/msg/data）vs `data`（对象本身），变量名必须与内容一致
+
+**面试清单**
+- 简历一句话：基于 pytest + requests 的若依接口自动化框架，20 条用例覆盖 4 模块，分层封装 + 数据自给自足
+- 最可能被追问：① 为什么用 fixture 造数据而不是写死 ID ② 三层断言怎么分层 ③ 逻辑删除怎么验证 ④ 用例失败会不会留下脏数据
+- 目前答不好：④（`addfinalizer` 还没用过）、参数化与分开写的判据只停留在"断言是否相同"
