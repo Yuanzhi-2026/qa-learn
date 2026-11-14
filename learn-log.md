@@ -30,6 +30,10 @@
 
 **卡在哪**：GitHub 推送不通（`github.com:443` / `:22` 均被封，只有 `api.github.com` 通）。仓库已建：`Yuanzhi-2026/qa-learn`
 
-**明天第一步**：开代理 → `git push -u origin master` → 看 Actions 是否变绿
+**明天第一步**：
+1. 开代理
+2. 远端默认分支是 `main`（只有一个 README 初始化提交 `031aea8c`），本地是 `master`
+3. 推送用：`git push -u origin master:main`
+4. 到 GitHub 看 Actions 是否变绿
 
 **B 选项（端到端 CI）待决定**：需 4~6 小时，CI 里 service container 起 MySQL+Redis + 若依源码 `mvn package`（jar 86MB 无法走 API 上传）
