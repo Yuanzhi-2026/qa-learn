@@ -10,8 +10,17 @@ def test_get_system_user_list_returns_200(client):
 
 
 @pytest.fixture
-def new_user_id(client):
+def new_user_id(client, request):
   name = f"qa_{uuid.uuid4().hex[:8]}"
+  def cleanup():
+    rows=client.request("GET", "/system/user/list", params={"userName": name})["rows"]
+    for row in rows:
+      if row["userName"] == name:
+        client.request("DELETE", f"/system/user/{row['userId']}")
+
+  request.addfinalizer(cleanup)
+
+
   client.request("POST", "/system/user", 
                  json={"userName" : name, "nickName": "测试用户", "password": "test456",
                  "deptId": 103, "roleIds": [2], "postId": [1], "sex": "0", "status": 0})
@@ -25,17 +34,17 @@ def new_user_id(client):
  
 
 def test_put_system_user_returns_200(client, new_user_id):
-  data=client.request("GET", f"/system/user/{new_user_id}")
-  data["data"]["nickName"]="yuanzi"
-  client.request("PUT", "/system/user", json=data["data"])
-  data=client.request("GET", f"/system/user/{new_user_id}")
-  assert data["data"]["nickName"] == "yuanzi"
-  assert data["data"]["deptId"] == 103
+  body=client.request("GET", f"/system/user/{new_user_id}")
+  body["data"]["nickName"]="yuanzi"
+  client.request("PUT", "/system/user", json=body["data"])
+  body=client.request("GET", f"/system/user/{new_user_id}")
+  assert body["data"]["nickName"] == "yuanzi"
+  assert body["data"]["deptId"] == 103
 
 
-def test_delete_systen_user_returns_200(client, new_user_id):
+def test_delete_system_user_returns_200(client, new_user_id):
   client.request("DELETE", f"/system/user/{new_user_id}")
-  data=client.request("GET", f"/system/user/{new_user_id}")
-  assert data["data"]["delFlag"] == "2"
+  body=client.request("GET", f"/system/user/{new_user_id}")
+  assert body["data"]["delFlag"] == "2"
 
   
