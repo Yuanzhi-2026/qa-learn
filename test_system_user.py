@@ -40,6 +40,7 @@ def test_put_system_user_returns_200(client, new_user_id):
   body=client.request("GET", f"/system/user/{new_user_id}")
   assert body["data"]["nickName"] == "yuanzi"
   assert body["data"]["deptId"] == 103
+  assert body["data"]["delFlag"] == "0"
 
 
 def test_delete_system_user_returns_200(client, new_user_id):
