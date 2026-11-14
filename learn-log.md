@@ -23,3 +23,13 @@
 - 简历一句话：基于 pytest + requests 的若依接口自动化框架，20 条用例覆盖 4 模块，分层封装 + 数据自给自足
 - 最可能被追问：① 为什么用 fixture 造数据而不是写死 ID ② 三层断言怎么分层 ③ 逻辑删除怎么验证 ④ 用例失败会不会留下脏数据
 - 目前答不好：④（`addfinalizer` 还没用过）、参数化与分开写的判据只停留在"断言是否相同"
+
+## 下次继续（2026-11-13 记录）
+
+**已完成**：20 条用例全绿 · fixture 改用 `addfinalizer` · README 含「测试中发现的服务端行为」· `.github/workflows/ci.yml` 已写好
+
+**卡在哪**：GitHub 推送不通（`github.com:443` / `:22` 均被封，只有 `api.github.com` 通）。仓库已建：`Yuanzhi-2026/qa-learn`
+
+**明天第一步**：开代理 → `git push -u origin master` → 看 Actions 是否变绿
+
+**B 选项（端到端 CI）待决定**：需 4~6 小时，CI 里 service container 起 MySQL+Redis + 若依源码 `mvn package`（jar 86MB 无法走 API 上传）
