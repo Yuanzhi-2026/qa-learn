@@ -23,7 +23,7 @@ def new_user_id(client, request):
 
   client.request("POST", "/system/user", 
                  json={"userName" : name, "nickName": "测试用户", "password": "test456",
-                 "deptId": 103, "roleIds": [2], "postId": [1], "sex": "0", "status": 0})
+                 "deptId": 103, "roleIds": [2], "postIds": [1], "sex": "0", "status": "0"})
   rows=client.request("GET", "/system/user/list", params={
                       "userName": name})
   uid=rows["rows"][0]["userId"]
