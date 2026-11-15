@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
+  # ── 第一层：代码健康检查，30 秒内出结果，不需要被测服务 ──
   check:
     name: 语法与用例收集检查
     runs-on: ubuntu-latest
@@ -27,3 +28,106 @@ jobs:
 
       - name: 用例收集检查（不发起真实请求，无需被测服务）
         run: pytest --collect-only -q
+
+  # ── 第二层：端到端业务回归，真起 MySQL + Redis + 若依，跑全部用例 ──
+  integration:
+    name: 端到端测试（真实若依服务）
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ry-vue
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 被测系统不进仓库（jar 86 MB 超出 GitHub API 单次请求上限），
+      # 每次 CI 现场拉源码编译。默认跟 master，与本地开发环境一致。
+      - name: 拉取若依源码
+        run: |
+          git clone --depth 1 --branch master https://github.com/yangzongzhuan/RuoYi-Vue.git /tmp/ruoyi
+          echo "被测版本 commit: $(git -C /tmp/ruoyi rev-parse HEAD)"
+
+      - name: 安装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: 初始化数据库（建表 + 种子数据）
+        run: |
+          for f in /tmp/ruoyi/sql/*.sql; do
+            echo "导入 $(basename "$f")"
+            mysql -h127.0.0.1 -uroot -proot ry-vue < "$f"
+          done
+          echo "用户数：$(mysql -h127.0.0.1 -uroot -proot -N -e 'select count(*) from sys_user' ry-vue)"
+
+      - name: 编译若依
+        working-directory: /tmp/ruoyi
+        run: mvn -B -DskipTests package
+
+      - name: 启动若依
+        run: |
+          nohup java -jar /tmp/ruoyi/ruoyi-admin/target/ruoyi-admin.jar \
+            --spring.datasource.druid.master.url="jdbc:mysql://127.0.0.1:3306/ry-vue?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai" \
+            --spring.datasource.druid.master.username=root \
+            --spring.datasource.druid.master.password=root \
+            > /tmp/ruoyi.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8080/captchaImage > /dev/null; then
+              echo "服务就绪，耗时约 $((i * 3)) 秒"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::服务启动超时，最后 80 行日志："
+          tail -80 /tmp/ruoyi.log
+          exit 1
+
+      - name: 安装 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 安装测试依赖
+        run: pip install -r requirements.txt
+
+      - name: 跑全部接口用例
+        env:
+          BASE_URL: http://127.0.0.1:8080
+        run: pytest -q --html=reports/report.html --self-contained-html
+
+      - name: 失败时输出被测服务日志
+        if: failure()
+        run: tail -120 /tmp/ruoyi.log
+
+      - name: 上传测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report
+          path: reports/
+          retention-days: 7
