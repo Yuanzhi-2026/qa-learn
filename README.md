@@ -1,5 +1,7 @@
 # 若依管理系统 · 接口自动化测试
 
+[![CI](https://github.com/Yuanzhi-2026/qa-learn/actions/workflows/ci.yml/badge.svg)](https://github.com/Yuanzhi-2026/qa-learn/actions/workflows/ci.yml)
+
 基于 Python + pytest + requests 的接口自动化测试项目，被测系统为 RuoYi 3.9.2（本地部署于 `http://127.0.0.1:8080`）。
 
 ## 技术栈
