@@ -11,7 +11,9 @@
 | Python | 3.11 |
 | pytest | 9.2.0 |
 | requests | 2.34.2 |
-| 被测系统 | RuoYi 3.9.2（Spring Boot + JWT） |
+| 被测系统 | RuoYi 3.9.2（Spring Boot 4.1 + JWT） |
+| 数据库 / 缓存 | MySQL 8.0 / Redis 7（CI 环境） |
+| 运行环境 | JDK 17 / Python 3.11 |
 
 ## 目录结构
 
@@ -27,6 +29,9 @@ qa-learn/
 ├── test_user.py         # 用户 CRUD（增 / 查 / 改 / 删 / 鉴权）
 ├── test_system.py       # 系统模块只读接口（部门 / 角色 / 配置 / 字典 / 在线用户 / 菜单）
 ├── api_index.py         # 辅助脚本：从 OpenAPI 文档检索接口定义
+├── probe.py             # 辅助脚本：打印任意接口的返回结构
+├── learn-log.md         # 复现日志：踩坑记录与复盘
+├── .github/workflows/   # CI：代码检查 + 端到端测试
 └── practice/            # 早期练习脚本（不参与用例收集）
 ```
 
@@ -39,6 +44,9 @@ pip install -r requirements.txt
 
 # 3. 运行全部用例
 pytest
+
+# 换环境不用改代码，用环境变量覆盖
+$env:BASE_URL="http://测试机IP:8080"; pytest
 
 # 只跑某个文件 / 某条用例
 pytest test_user.py
@@ -87,11 +95,39 @@ config.py  →  conftest.py  →  api/client.py  →  用例
 
 形状相同的 5 个只读列表接口使用 `@pytest.mark.parametrize` 复用同一套断言，避免复制粘贴。
 
+## 持续集成
+
+CI 分两层，一层验证代码本身，一层验证真实系统。
+
+| 作业 | 做什么 | 耗时 | 能发现什么 | 发现不了什么 |
+|---|---|---|---|---|
+| `check` | `compileall` 语法检查 + `pytest --collect-only` 用例收集 | 约 20 秒 | 语法错误、fixture 名对不上、参数化写错 | 接口行为变化 |
+| `integration` | 起 MySQL 8 + Redis 7，现场编译并启动若依，跑全部 20 条用例 | 约 2 分钟（Maven 有缓存） | 业务回归、接口契约变更 | 前端问题、性能问题 |
+
+`integration` 的执行链路：
+
+```
+MySQL/Redis service container
+  → 导入 ry_*.sql + quartz.sql（建表 + 种子数据）
+  → 关闭登录验证码（UPDATE sys_config）
+  → clone RuoYi-Vue 源码并用 JDK 17 编译
+  → java -jar 启动，轮询 /captchaImage 直到就绪
+  → BASE_URL=http://127.0.0.1:8080 pytest
+```
+
+关键取舍：**被测系统不进仓库**。`ruoyi-admin.jar` 有 86 MB，超出 GitHub API 单次请求上限（base64 后约 115 MB），所以 CI 每次现场拉源码编译。Maven 依赖用 `actions/cache` 缓存，第二次起编译只花几十秒。
+
+三个必须处理的环境差异（本地跑不出来，CI 就红）：
+
+1. `setup-java` 的 `cache: maven` 要求本仓库根目录有 `pom.xml`，我们的是运行时拉取，所以改用 `actions/cache` 单独缓存 `~/.m2`
+2. 若依 `logback.xml` 把日志路径写死为 `/home/ruoyi/logs`，目录不存在会直接启动失败
+3. 种子数据里 `sys.account.captchaEnabled = true`，登录必须带图形验证码；CI 里改成 `false`
+
 ## 已知限制
 
-- 被测系统为本地部署，用例未做环境切换（`config.py` 中写死 `127.0.0.1:8080`）
-- 登录接口未覆盖验证码场景（本地部署已关闭验证码）
-- 未接入 CI，需手动执行
+- 登录接口未覆盖验证码场景（本地与 CI 环境都已关闭验证码）
+- CI 的端到端作业跑在固定的 `ubuntu-latest` 上，未覆盖 Windows / 容器化部署场景
+- 用例只覆盖单接口行为，未做跨接口的业务链路测试与并发场景
 
 ## 测试过程中发现的服务端行为
 

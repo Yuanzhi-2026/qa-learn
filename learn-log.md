@@ -51,3 +51,24 @@
 **绕过第 3 个坑的办法**：先把不含 ci.yml 的提交 `e770c06` 推到 main，让代码先上线，再补授权推剩余提交
 
 **最终状态**：本地分支由 `master` 改名 `main`，与远端一致；README 加了 CI 徽章
+
+## 2026-11-15 晚 · B 方案完成：CI 里跑真实若依
+
+**最终结果**：`integration` 作业全绿，20 passed，耗时约 2 分钟（Maven 有缓存）
+
+**做了什么**
+
+1. `config.py` 改成读环境变量（`BASE_URL` / `ADMIN_USER` / `ADMIN_PASSWORD` / `TIMEOUT`），本地默认值不变
+2. `ci.yml` 拆成两个作业：`check`（语法 + 收集，20 秒）与 `integration`（起 MySQL+Redis+若依，跑真接口）
+3. 被测系统不进仓库：CI 每次 clone RuoYi-Vue 源码，用 JDK 17 现场编译
+
+**四个坑，按踩到顺序**
+
+| 坑 | 报错 | 解法 |
+|---|---|---|
+| setup-java 的 maven 缓存 | `No file in ... matched to [**/pom.xml]` | 本仓库没有 pom.xml，改用 `actions/cache` 缓存 `~/.m2/repository` |
+| 若依日志路径写死 | `Logback configuration error detected` + `/home/ruoyi/logs` 不存在 | `sudo mkdir -p /home/ruoyi/logs` |
+| 登录验证码 | `{'msg': '验证码已失效', 'code': 500}` | 种子数据 `sys.account.captchaEnabled=true`，导入 SQL 后 UPDATE 成 false |
+| gh token 缺 workflow 权限 | `refusing to allow an OAuth App to create ... workflow` | `gh auth refresh -s workflow` |
+
+**记住的判断**：CI 里 `check` 绿只说明代码能跑，`integration` 绿才说明系统还能用。两层都要有。
