@@ -91,6 +91,13 @@ jobs:
           done
           echo "用户数：$(mysql -h127.0.0.1 -uroot -proot -N -e 'select count(*) from sys_user' ry-vue)"
 
+          # 关闭登录验证码：种子数据里 sys.account.captchaEnabled=true，
+          # 登录必须带 uuid+code，接口测试拿不到图形验证码。
+          # 这一步让 CI 环境与本地手工测试环境一致。
+          mysql -h127.0.0.1 -uroot -proot -e \
+            "update sys_config set config_value='false' where config_key='sys.account.captchaEnabled'" ry-vue
+          echo "验证码开关：$(mysql -h127.0.0.1 -uroot -proot -N -e "select config_value from sys_config where config_key='sys.account.captchaEnabled'" ry-vue)"
+
       - name: 编译若依
         working-directory: /tmp/ruoyi
         run: mvn -B -DskipTests package
