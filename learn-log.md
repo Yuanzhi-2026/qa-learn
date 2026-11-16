@@ -72,3 +72,19 @@
 | gh token 缺 workflow 权限 | `refusing to allow an OAuth App to create ... workflow` | `gh auth refresh -s workflow` |
 
 **记住的判断**：CI 里 `check` 绿只说明代码能跑，`integration` 绿才说明系统还能用。两层都要有。
+
+## 2026-11-15 深夜 · 越权用例开局
+
+**进度**：简历表述写完（`简历表述.md`），越权用例的 fixture 写到一半
+
+**实测得到的事实**
+
+| 调用方 | /system/user/list |
+|---|---|
+| admin | code 200 |
+| 普通用户 ry | code 200（它的角色被分了很多菜单，**不能用来测越权**） |
+| 新建空权限用户 | HTTP 200 + **code 403**「没有权限，请联系管理员授权」 |
+
+**其他实测**：`GET /system/role/{名字}` 报「参数[roleId]要求 Long」；角色被用户引用时删除报「已分配,不能删除」，所以 cleanup 必须先删用户再删角色。
+
+**下次继续**：补完 `low_priv_token` 的创建部分（造角色→回查 roleId→造用户→登录 yield token），再写 3 条用例（越权 403 ×2 + 对照组 /test/user/list 200）

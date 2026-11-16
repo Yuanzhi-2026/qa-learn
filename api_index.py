@@ -25,15 +25,30 @@ if not detail:
         print(" ", l)
 
 
+METHODS = ("get", "post", "put", "delete", "patch")
+
+
 def show_detail(keyword):
-    """打印某个接口的完整定义：参数在哪、要什么字段"""
+    """打印接口的完整定义：参数在哪、要什么字段。
+
+    keyword 可以带方法名限定，例如 "post system/role"；
+    只写路径片段就会把这个路径下的所有方法都打出来。
+    """
+    words = keyword.lower().split()
+    method_filter = [w for w in words if w in METHODS]
+    path_kw = " ".join(w for w in words if w not in METHODS)
+
+    hit = 0
     for path, ops in spec["paths"].items():
-        if keyword not in path:
+        if path_kw and path_kw not in path:
             continue
         for method, op in ops.items():
-            if method not in ("get", "post", "put", "delete", "patch"):
+            if method not in METHODS:
                 continue
-            print(f"\n{method.upper()} {path}   [{op.get('summary','')}]")
+            if method_filter and method not in method_filter:
+                continue
+            hit += 1
+            print(f"\n{method.upper()} {path}   [{op.get('summary', '')}]")
             if "parameters" in op:
                 for prm in op["parameters"]:
                     loc = prm.get("in", "?")
@@ -52,5 +67,11 @@ def show_detail(keyword):
                     print(f"  请求体 Content-Type={ctype}")
                     print(f"  字段({cls}): " + ", ".join(fields.keys()))
 
+    if hit == 0:
+        print(f"没找到匹配「{keyword}」的接口。")
+        print("  提示：若依是 RESTful 风格，新增是 POST 到集合路径（POST /system/role），没有 /add 后缀")
+        print("  去掉 -d 先看完整列表，例如：python api_index.py system/role")
+
+
 if detail and len(sys.argv) > 1:
-    show_detail([a for a in sys.argv[1:] if not a.startswith("-")][0])
+    show_detail(" ".join(a for a in sys.argv[1:] if not a.startswith("-")))
