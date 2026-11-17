@@ -88,3 +88,33 @@
 **其他实测**：`GET /system/role/{名字}` 报「参数[roleId]要求 Long」；角色被用户引用时删除报「已分配,不能删除」，所以 cleanup 必须先删用户再删角色。
 
 **下次继续**：补完 `low_priv_token` 的创建部分（造角色→回查 roleId→造用户→登录 yield token），再写 3 条用例（越权 403 ×2 + 对照组 /test/user/list 200）
+
+## 2026-11-17 · 越权用例完成（23 passed）
+
+**成果**：新增 3 条越权用例 + 1 个 `low_priv_token` fixture，全部 23 条 1.86s 通过，库里零残留。
+
+| 用例 | 期望 |
+|---|---|
+| 低权限用户查 `/system/user/list` | HTTP 200 + 业务码 403「没有权限，请联系管理员授权」 |
+| 低权限用户查 `/system/dept/list` | 同上 |
+| 低权限用户查 `/test/user/list` | 200，`data` 2 条（对照组） |
+
+**关键事实（实测）**
+- 越权返回 **HTTP 200 + 业务码 403**，只断 HTTP 状态码的用例毫无防护力
+- 内置 `ry` 不能测越权：它的角色被分配了大量菜单，实测全部 200
+- `/test/user/list` 返回结构是 `{code,data,msg}`，没有 `total`/`rows`，且**明文返回 password**
+- 角色被用户引用时删不掉（「xx已分配,不能删除」），cleanup 必须先删用户
+
+**权限机制**：`@PreAuthorize("@ss.hasPermi('system:user:list')")` → `PermissionService.hasPermi` → 看 `LoginUser.permissions` 集合（admin 是通配符 `*:*:*`）。菜单为空的角色 → 集合为空 → 直接 false → 403。`/test/user/list` 没有任何 `@PreAuthorize`，只要登录就 200。
+
+**这次踩的坑（自己写代码时）**
+1. 一个 fixture 只能有一个 `yield`，第二个起是语法性错误；`yield` 后的代码是 teardown
+2. `client.request(...)["rows"]` 结果没赋给变量 → 下一行 `client[...]` 报 `'ApiClient' object is not subscriptable`（连踩 3 次）
+3. `menuIds` 拼成 `meuIds` → 报 `Cannot read the array length because "<local4>" is null`，报错里看不到字段名
+4. `roleIds: []` + `roleId: [x]` → 用户没绑上角色，用例会「假通过」（验证的是没角色的用户）
+5. 列表接口顶层直接是 `rows`，详情接口才是 `data`
+6. `def low_priv_token[:20]` —— 切片表达式当函数名，`SyntaxError` 会让整个测试文件收集失败（21→17 items）
+
+**待办**
+- conftest.py 里 3 处硬编码 `test123456`，应挪到 `config.py` 走环境变量
+- 可加一条用例：造 `roleKey="admin"` 的角色，验证它不会拿到超级管理员权限（判断走 `userId==1`，不是 roleKey）

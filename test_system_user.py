@@ -48,4 +48,18 @@ def test_delete_system_user_returns_200(client, new_user_id):
   body=client.request("GET", f"/system/user/{new_user_id}")
   assert body["data"]["delFlag"] == "2"
 
-  
+
+def test_new_low_priv_user_returns_403(low_priv_token):
+  low=ApiClient(token=low_priv_token)
+  body=low.request("GET", "/system/user/list", expect_code=403)
+  assert "没有权限" in body["msg"]
+
+def test_new_low_priv_dept_returns_403(low_priv_token):
+  low=ApiClient(token=low_priv_token)
+  body=low.request("GET", "/system/dept/list", expect_code=403)
+  assert "没有权限" in body["msg"]
+
+def test_low_priv_user_can_access_test_user_list(low_priv_token):
+  low=ApiClient(token=low_priv_token)
+  body=low.request("GET", "/test/user/list", expect_code=200)
+  assert len(body["data"])>=1

@@ -28,6 +28,7 @@ qa-learn/
 ├── test_login.py        # 登录接口（正向 / 密码错误）
 ├── test_user.py         # 用户 CRUD（增 / 查 / 改 / 删 / 鉴权）
 ├── test_system.py       # 系统模块只读接口（部门 / 角色 / 配置 / 字典 / 在线用户 / 菜单）
+├── test_system_user.py  # 系统用户真实 CRUD + 越权访问（403 / 对照组）
 ├── api_index.py         # 辅助脚本：从 OpenAPI 文档检索接口定义
 ├── probe.py             # 辅助脚本：打印任意接口的返回结构
 ├── learn-log.md         # 复现日志：踩坑记录与复盘
@@ -55,7 +56,7 @@ pytest test_user.py::test_delete_user
 
 ## 用例覆盖
 
-共 **20 条**，覆盖 4 个模块：
+共 **23 条**，覆盖 5 个模块：
 
 | 模块 | 用例数 | 覆盖点 |
 |---|---|---|
@@ -63,6 +64,7 @@ pytest test_user.py::test_delete_user
 | 用户（测试模块） | 6 | 列表查询、新增、详情、更新后读回校验、删除后读回校验、未授权 401 |
 | 系统 | 9 | 部门树、角色列表（含分页一致性校验）、参数配置、岗位、公告、字典类型、在线用户、菜单树、未授权 401 |
 | 系统用户（真实 CRUD） | 3 | 列表条件查询、修改后读回校验（含字段未被清空）、逻辑删除后 delFlag 校验 |
+| 越权访问 | 3 | 空权限角色用户访问 `system/*` 返回 403（用户 / 部门）、同一用户访问免鉴权 demo 接口返回 200（对照组） |
 
 ## 设计说明
 
@@ -89,6 +91,7 @@ config.py  →  conftest.py  →  api/client.py  →  用例
 
 - `token` 为 session 级 fixture，整个测试过程只登录一次
 - `new_user_id` 为 function 级 fixture，每条用例创建独立数据，`yield` 后自动删除
+- `low_priv_token` 为 function 级 fixture，先造空权限角色、再建用户并绑定该角色，最后用该用户登录取 token；清理函数通过 `addfinalizer` 在创建动作之前登记，保证创建中途失败也能清干净
 - 用例之间无执行顺序依赖，可单独运行
 
 **4. 参数化**
@@ -102,7 +105,7 @@ CI 分两层，一层验证代码本身，一层验证真实系统。
 | 作业 | 做什么 | 耗时 | 能发现什么 | 发现不了什么 |
 |---|---|---|---|---|
 | `check` | `compileall` 语法检查 + `pytest --collect-only` 用例收集 | 约 20 秒 | 语法错误、fixture 名对不上、参数化写错 | 接口行为变化 |
-| `integration` | 起 MySQL 8 + Redis 7，现场编译并启动若依，跑全部 20 条用例 | 约 2 分钟（Maven 有缓存） | 业务回归、接口契约变更 | 前端问题、性能问题 |
+| `integration` | 起 MySQL 8 + Redis 7，现场编译并启动若依，跑全部 23 条用例 | 约 2 分钟（Maven 有缓存） | 业务回归、接口契约变更 | 前端问题、性能问题 |
 
 `integration` 的执行链路：
 
