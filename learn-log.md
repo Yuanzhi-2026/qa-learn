@@ -115,6 +115,9 @@
 5. 列表接口顶层直接是 `rows`，详情接口才是 `data`
 6. `def low_priv_token[:20]` —— 切片表达式当函数名，`SyntaxError` 会让整个测试文件收集失败（21→17 items）
 
+**CI**：`b8daae9` 两层全绿（check + integration），README 用例表已更新为 23 条
+
 **待办**
+- 收口：把越权成果补进 `简历表述.md` 与 Obsidian（认证 vs 授权、越权测试）
 - conftest.py 里 3 处硬编码 `test123456`，应挪到 `config.py` 走环境变量
 - 可加一条用例：造 `roleKey="admin"` 的角色，验证它不会拿到超级管理员权限（判断走 `userId==1`，不是 roleKey）
