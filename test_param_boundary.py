@@ -48,18 +48,13 @@ def test_create_role_with_name_30_chars_returns_200(client, request):
   assert len(row[0]["roleName"]) == 30
 
 
-@pytest.mark.xfail(strict=True, reason="若依未校验 pageNum 类型，非数字被静默忽略并返回全量数据")
-def test_role_list_with_non_numeric_page_num_is_rejected(client):
-  body=client.request("GET", "/system/role/list", params={
-    "pageNum": "abc",
-    "pageSize": 10,
-  })
-  assert body["code"]!=200
-
-@pytest.mark.xfail(strict=True, reason="pageNum 负数未校验，服务端按默认值返回全量数据")
-def test_role_list_with_negative_page_num_is_rejected(client):
-  body=client.request("GET", "/system/role/list", params={
-    "pageNum": -1,
-    "pageSize": 10,
-  })
+@pytest.mark.parametrize("params", [
+  pytest.param({"pageNum": "abc", "pageSize": 10}, id="pageNum非数字"),
+  pytest.param({"pageNum": -1, "pageSize": 10}, id="pageNum负数"), 
+  pytest.param({"pageNum": 1, "pageSize": 100000}, id="pageSize十万"),
+  pytest.param({"pageNum": 1, "pageSize": 0}, id="pageSize零"),
+])
+@pytest.mark.xfail(strict=True, reason="若依未校验分页参数的类型与范围，非法值被静默忽略")
+def test_role_list_with_invalid_page_params_is_rejected(client, params):
+  body=client.request("GET", "/system/role/list", params=params)
   assert body["code"]!=200

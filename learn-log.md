@@ -182,3 +182,27 @@ README 新增「已知缺陷（xfail）」小节，把分页参数 4 个缺陷�
 - `pageSize=100000` 无上限、`pageSize=0` 时 total 与 rows 不一致 → 再补 2 条 xfail
 - 幂等维度：重复删除、重复提交
 - conftest.py 硬编码 `test123456` 挪到 config.py
+
+## 2026-11-18 晚 · 分页参数合并为参数化（30 条：26 passed + 4 xfailed）
+
+`test_param_boundary.py` 的 4 组非法分页参数合并成 1 个函数 + `@pytest.mark.parametrize`，全部 `xfail(strict=True)`，展开成 4 个测试项。
+
+```python
+@pytest.mark.parametrize("params", [
+  pytest.param({"pageNum": "abc", "pageSize": 10}, id="pageNum非数字"),
+  pytest.param({"pageNum": -1,    "pageSize": 10}, id="pageNum负数"),
+  pytest.param({"pageNum": 1,     "pageSize": 100000}, id="pageSize十万"),
+  pytest.param({"pageNum": 1,     "pageSize": 0}, id="pageSize零"),
+])
+@pytest.mark.xfail(strict=True, reason="若依未校验分页参数的类型与范围")
+```
+
+**学到的机制**
+- `pytest.param(值, id=...)` 给参数加可读名字；`marks=` 可以只给某一组加标记（同函数里混合「应通过」与「已知缺陷」时用）
+- 参数化 + xfail 叠加：函数上标 xfail → 展开的每一项都标为预期失败
+- 中文 id 在 Windows 控制台显示成 `\u975e\u6570\u5b57` 转义，终端与 CI 日志里不可读 —— id 建议用 ASCII（`pageNum_abc` 这类）
+
+**待办**
+- 把 4 个 id 改成 ASCII，避免终端乱码
+- 幂等维度：重复删除、重复提交
+- conftest.py 硬编码 `test123456` 挪到 config.py
