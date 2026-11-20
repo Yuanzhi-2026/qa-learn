@@ -29,6 +29,7 @@ qa-learn/
 ├── test_user.py         # 用户 CRUD（增 / 查 / 改 / 删 / 鉴权）
 ├── test_system.py       # 系统模块只读接口（部门 / 角色 / 配置 / 字典 / 在线用户 / 菜单）
 ├── test_system_user.py  # 系统用户真实 CRUD + 越权访问（403 / 对照组）
+├── test_param_boundary.py  # 参数边界：必填 / 长度边界 / 分页参数类型
 ├── api_index.py         # 辅助脚本：从 OpenAPI 文档检索接口定义
 ├── probe.py             # 辅助脚本：打印任意接口的返回结构
 ├── learn-log.md         # 复现日志：踩坑记录与复盘
@@ -56,7 +57,7 @@ pytest test_user.py::test_delete_user
 
 ## 用例覆盖
 
-共 **23 条**，覆盖 5 个模块：
+共 **28 条**，覆盖 6 个模块（26 条通过 + 2 条标记为已知缺陷）：
 
 | 模块 | 用例数 | 覆盖点 |
 |---|---|---|
@@ -65,6 +66,18 @@ pytest test_user.py::test_delete_user
 | 系统 | 9 | 部门树、角色列表（含分页一致性校验）、参数配置、岗位、公告、字典类型、在线用户、菜单树、未授权 401 |
 | 系统用户（真实 CRUD） | 3 | 列表条件查询、修改后读回校验（含字段未被清空）、逻辑删除后 delFlag 校验 |
 | 越权访问 | 3 | 空权限角色用户访问 `system/*` 返回 403（用户 / 部门）、同一用户访问免鉴权 demo 接口返回 200（对照组） |
+| 参数边界 | 5 | 缺必填、字段超长被拒、边界值下沿成功；分页参数 `pageNum` 类型错误与负数（2 条 `xfail`，见下） |
+
+## 已知缺陷（用例标记为 xfail）
+
+以下行为经实测确认与合理预期不符，用例断言写的是**期望值**并用 `@pytest.mark.xfail(strict=True)` 标记，缺陷修复后用例会转为失败以提醒更新。
+
+| 接口 | 现象 | 影响 |
+|---|---|---|
+| `GET /system/role/list` | `pageNum=abc` 被静默忽略，按默认值返回全量数据（code 200） | 调用方传错参数类型完全无感知 |
+| `GET /system/role/list` | `pageNum=-1` 未校验，按默认值返回全量数据（code 200） | 分页参数越界无反馈 |
+| `GET /system/role/list` | `pageSize=100000` 无上限校验 | 大表场景下可被拖慢或内存放大 |
+| `GET /system/role/list` | `pageSize=0` 时 `total=2` 但 `rows` 为空 | 分页契约不一致 |
 
 ## 设计说明
 
@@ -105,7 +118,7 @@ CI 分两层，一层验证代码本身，一层验证真实系统。
 | 作业 | 做什么 | 耗时 | 能发现什么 | 发现不了什么 |
 |---|---|---|---|---|
 | `check` | `compileall` 语法检查 + `pytest --collect-only` 用例收集 | 约 20 秒 | 语法错误、fixture 名对不上、参数化写错 | 接口行为变化 |
-| `integration` | 起 MySQL 8 + Redis 7，现场编译并启动若依，跑全部 23 条用例 | 约 2 分钟（Maven 有缓存） | 业务回归、接口契约变更 | 前端问题、性能问题 |
+| `integration` | 起 MySQL 8 + Redis 7，现场编译并启动若依，跑全部 28 条用例 | 约 2 分钟（Maven 有缓存） | 业务回归、接口契约变更 | 前端问题、性能问题 |
 
 `integration` 的执行链路：
 

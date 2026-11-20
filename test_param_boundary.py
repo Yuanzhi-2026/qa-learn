@@ -1,4 +1,5 @@
 import uuid
+import pytest
 
 def test_create_role_without_name_returns_500(client):
   body=client.request("POST", "/system/role", expect_code=500, json={
@@ -45,3 +46,20 @@ def test_create_role_with_name_30_chars_returns_200(client, request):
   assert len(row) ==1
   assert row[0]["roleName"] == roleName
   assert len(row[0]["roleName"]) == 30
+
+
+@pytest.mark.xfail(strict=True, reason="若依未校验 pageNum 类型，非数字被静默忽略并返回全量数据")
+def test_role_list_with_non_numeric_page_num_is_rejected(client):
+  body=client.request("GET", "/system/role/list", params={
+    "pageNum": "abc",
+    "pageSize": 10,
+  })
+  assert body["code"]!=200
+
+@pytest.mark.xfail(strict=True, reason="pageNum 负数未校验，服务端按默认值返回全量数据")
+def test_role_list_with_negative_page_num_is_rejected(client):
+  body=client.request("GET", "/system/role/list", params={
+    "pageNum": -1,
+    "pageSize": 10,
+  })
+  assert body["code"]!=200

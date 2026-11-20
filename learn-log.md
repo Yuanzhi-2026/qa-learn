@@ -161,3 +161,24 @@
 **下次继续**
 - 补写 2 条 xfail：`pageNum=abc`、`pageNum=-1` 应被拒绝（`strict=True`），目标 `26 passed, 2 xfailed`
 - 之后：`pageSize=100000` 无上限、`pageSize=0` 契约不一致
+
+## 2026-11-18 续 · xfail 用例（28 条：26 passed + 2 xfailed）
+
+**成果**：`test_param_boundary.py` 追加 2 条 `@pytest.mark.xfail(strict=True)`，断言写期望值（`code != 200`），标记当前缺陷。
+
+| 用例 | 输入 | 现状 |
+|---|---|---|
+| `test_role_list_with_non_numeric_page_num_is_rejected` | `pageNum=abc` | code 200 静默返回全量 → xfailed |
+| `test_role_list_with_negative_page_num_is_rejected` | `pageNum=-1` | code 200 → xfailed |
+
+**xfail 语义**（面试可讲）
+- 断言写「应该怎样」，不写「现在怎样」，否则等于把缺陷固化成预期
+- `strict=True`：缺陷修复后断言通过 → 用例转为 FAILED，逼你回来撤标记；不加则永远 xpassed 无人知晓
+- 报告里 `x` 表示预期内失败，不污染绿灯
+
+README 新增「已知缺陷（xfail）」小节，把分页参数 4 个缺陷（含未写用例的 `pageSize=100000`、`pageSize=0`）列成表。
+
+**下次继续**
+- `pageSize=100000` 无上限、`pageSize=0` 时 total 与 rows 不一致 → 再补 2 条 xfail
+- 幂等维度：重复删除、重复提交
+- conftest.py 硬编码 `test123456` 挪到 config.py
