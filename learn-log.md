@@ -206,3 +206,32 @@ README 新增「已知缺陷（xfail）」小节，把分页参数 4 个缺陷�
 - 把 4 个 id 改成 ASCII，避免终端乱码
 - 幂等维度：重复删除、重复提交
 - conftest.py 硬编码 `test123456` 挪到 config.py
+
+## 2026-11-21 · 幂等维度（33 项：29 passed + 4 xfailed）
+
+`test_idempotency.py` 三条：重复删除、重复创建（同 roleKey）、重复 PUT。全部自己动手改，未代写。
+
+**实测结论（若依 3.9.2）**
+| 场景 | 行为 | 性质 |
+|---|---|---|
+| 重复删除同一角色 | 每次都「操作成功」 | 逻辑删除天然幂等：`UPDATE ... WHERE role_id=?` 行还在，影响行数仍 1 |
+| 删除不存在的 ID (999999) | 500「操作失败」 | 影响 0 行才报错 |
+| 重复创建相同 roleKey | 500「角色名称已存在」，库里仍 1 条 | 唯一约束兜底，不是业务代码判重 |
+| 重复 PUT 相同 body | 两次 200，数据不变 | 真幂等 |
+
+**踩过的坑（亲手撞过的，按出现顺序）**
+1. `assert body["code"]` 而 body 取自 `["data"]` → KeyError。**字段在哪层取决于下一步取哪个字段**：`code/msg` 在外层，`roleId/delFlag` 在 data 里，`total` 在列表外层
+2. 第二次 POST 忘了把 `expect_code` 改 500 → client 先红，自己的断言跑不到
+3. `assert "已存在" in body["msg"]` 而 body 来自详情接口 → 详情的 msg 永远是「操作成功」
+4. `PUT /system/role/{id}` 路径带 id → 500 `Request method 'PUT' is not supported`；**若依 PUT 的 id 在 body**
+5. 把 roleName 改成固定值 `yuanzi` → cleanup 按原名查不到，**用例绿灯但留下脏数据**
+6. 断言 `roleSort == 1` 而 PUT 前后都是 1 → 改成 2 才能证明更新生效
+
+**规则沉淀**
+- 一个断言只落在产生该字段的那次请求的返回上
+- 幂等用例必须有「数据未变/未多」的回查断言，光看状态码不算
+- 改字段要挑 cleanup 不依赖的字段（否则清理失效）
+- 断言必须有可能失败，否则什么都没证明
+- 逻辑删除（delFlag=2）后行仍在，若依无物理删除接口，「零残留」指业务视角（列表查不到）
+
+**已顺手改**：`test_param_boundary.py` 的 4 个 id 换成 ASCII（`pageNum_abc` 等），中文 id 在 Windows 终端显示为 `\u975e\u6570\u5b57` 乱码。

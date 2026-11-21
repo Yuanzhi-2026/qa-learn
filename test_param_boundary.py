@@ -49,10 +49,10 @@ def test_create_role_with_name_30_chars_returns_200(client, request):
 
 
 @pytest.mark.parametrize("params", [
-  pytest.param({"pageNum": "abc", "pageSize": 10}, id="pageNum非数字"),
-  pytest.param({"pageNum": -1, "pageSize": 10}, id="pageNum负数"), 
-  pytest.param({"pageNum": 1, "pageSize": 100000}, id="pageSize十万"),
-  pytest.param({"pageNum": 1, "pageSize": 0}, id="pageSize零"),
+  pytest.param({"pageNum": "abc", "pageSize": 10}, id="pageNum_abc"),
+  pytest.param({"pageNum": -1, "pageSize": 10}, id="pageNum_negative"), 
+  pytest.param({"pageNum": 1, "pageSize": 100000}, id="pageSize_100k"),
+  pytest.param({"pageNum": 1, "pageSize": 0}, id="pageSize_zero"),
 ])
 @pytest.mark.xfail(strict=True, reason="若依未校验分页参数的类型与范围，非法值被静默忽略")
 def test_role_list_with_invalid_page_params_is_rejected(client, params):
