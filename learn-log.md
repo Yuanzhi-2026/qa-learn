@@ -235,3 +235,48 @@ README 新增「已知缺陷（xfail）」小节，把分页参数 4 个缺陷�
 - 逻辑删除（delFlag=2）后行仍在，若依无物理删除接口，「零残留」指业务视角（列表查不到）
 
 **已顺手改**：`test_param_boundary.py` 的 4 个 id 换成 ASCII（`pageNum_abc` 等），中文 id 在 Windows 终端显示为 `\u975e\u6570\u5b57` 乱码。
+
+## 2026-11-22 · 并发维度（34 项：29 passed + 5 xfailed）
+
+`test_concurrency.py`：`threading.Barrier(10)` 让 10 个线程同一刻发同一份 `POST /system/role`。
+
+**实测结果（若依 3.9.2）**
+```
+并发 10 次 → 9 条成功插入（200），1 条被 checkRoleNameUnique 挡住（500）
+库里：9 条 roleName/roleKey 完全相同的角色
+```
+- 串行重复创建被正常拒绝（`test_create_role_twice...` 通过）→ 说明判重逻辑存在
+- 并发下 9 个同时通过 → 说明判重非原子（check-then-act 竞态）
+- `C:\dev\ruoyi\sql\ry_20260417.sql` 里 `sys_role` **只有主键**，`role_name`/`role_key` 无 UNIQUE → 数据库层无兜底
+
+**代码骨架（自己没写过 threading，脚手架由教练代写，需能讲清）**
+```python
+n = 10
+barrier = threading.Barrier(n)
+results, lock = [], threading.Lock()
+
+def worker():
+    barrier.wait()                      # 10 个到齐才一起发
+    c = ApiClient(token=token)          # 每线程独立 Session
+    try:
+        code = c.request("POST", "/system/role", json=payload)["code"]
+    except AssertionError as e:
+        code = str(e)[:60]
+    with lock:
+        results.append(code)
+
+threads = [threading.Thread(target=worker) for _ in range(n)]
+for t in threads: t.start()             # 先全部发射
+for t in threads: t.join()              # 再全部等落地
+```
+
+**学到的机制**
+- `Thread(target=f)` 只造对象，`start()` 才跑，`join()` 让主线程原地等
+- **必须先全部 start 再全部 join**，否则退化成串行，测不出竞态
+- `barrier` 凑不够 n 个线程会永久阻塞（n 必须等于线程数）
+- 共享 `results` 要配 `threading.Lock()`，`append` 非原子
+- 共享 `client` 里的 `requests.Session` 非线程安全 → 每线程新建 `ApiClient(token=token)`
+- `pytest --runxfail` 临时忽略 xfail 标记，用来抓真实失败证据
+- 断言消息要带实际值（条数 + 返回码列表），否则只知道失败不知道失败成什么样
+
+**易错点**：手抄代码时把讲解里的缩进一起复制 → `def worker()` 下面内容掉到函数外，`NameError: c/worker/n`
