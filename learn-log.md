@@ -280,3 +280,25 @@ for t in threads: t.join()              # 再全部等落地
 - 断言消息要带实际值（条数 + 返回码列表），否则只知道失败不知道失败成什么样
 
 **易错点**：手抄代码时把讲解里的缩进一起复制 → `def worker()` 下面内容掉到函数外，`NameError: c/worker/n`
+
+## 2026-11-22 · 跨接口链路实测（用例未写完，明天继续）
+
+**目标**：建角色 → 建用户挂角色 → 该用户登录 → 验权限生效/不生效。
+
+**实测结果（若依 3.9.2，2026-11-22）**
+
+| 步骤 | 结果 |
+|---|---|
+| 建角色 `menuIds=[]` + 用户挂该角色 → 登录 | 登录 200 |
+| 该用户 `GET /system/user/list` | **403 没有权限** |
+| 给角色 PUT `menuIds=[100]`（100 = `system:user:list`） | 操作成功 |
+| **同一 token** 再请求 | **200**（不用重新登录） |
+| 撤销 `menuIds=[]` → 同一 token | **403** |
+| 停用角色 `status="1"` → 同一 token | **403** |
+| 停用用户 `status="1"` → 同一 token | **403**（不是 401，token 仍有效但权限为空） |
+
+**结论**：权限每次请求实时判定（`@PreAuthorize("@ss.hasPermi(...)")`），不存在「改权限要重新登录才生效」。取舍：实时性 vs 每次请求的判定开销；若把权限塞进 JWT 就变成需等 token 过期。
+
+**明天要写的用例** `test_role_permission_chain.py`：一条，五步，用新用户自己的 token（admin 恒有权限，测不出 403）。
+坑：cleanup 先删用户再删角色；`POST /system/user` 需 `deptId=103`、`roleIds=[rid]`；menuId 别硬编码，按 `perms=="system:user:list"` 从 `/system/menu/list` 动态查。
+验收：35 项 = 30 passed + 5 xfailed。
