@@ -31,6 +31,8 @@ qa-learn/
 ├── test_system_user.py  # 系统用户真实 CRUD + 越权访问（403 / 对照组）
 ├── test_param_boundary.py  # 参数边界：必填 / 长度边界 / 分页参数类型
 ├── test_idempotency.py     # 幂等：重复删除 / 重复创建 / 重复更新
+├── test_concurrency.py     # 并发：10 线程同时创建同一角色
+├── test_role_permission_chain.py  # 跨接口链路：角色 → 用户 → 登录 → 权限生效
 ├── api_index.py         # 辅助脚本：从 OpenAPI 文档检索接口定义
 ├── probe.py             # 辅助脚本：打印任意接口的返回结构
 ├── learn-log.md         # 复现日志：踩坑记录与复盘
@@ -58,7 +60,7 @@ pytest test_user.py::test_delete_user
 
 ## 用例覆盖
 
-共 **33 条**，覆盖 7 个模块（29 条通过 + 4 条标记为已知缺陷）：
+共 **35 条**，覆盖 8 个模块（30 条通过 + 5 条标记为已知缺陷）：
 
 | 模块 | 用例数 | 覆盖点 |
 |---|---|---|
@@ -69,6 +71,8 @@ pytest test_user.py::test_delete_user
 | 越权访问 | 3 | 空权限角色用户访问 `system/*` 返回 403（用户 / 部门）、同一用户访问免鉴权 demo 接口返回 200（对照组） |
 | 参数边界 | 7 | 缺必填、字段超长被拒、边界值下沿成功（3 条）；分页参数 4 组非法输入用 `parametrize` 合并为 1 个函数、展开 4 项，全部 `xfail` |
 | 幂等 | 3 | 同一角色连续删除两次（`delFlag` 置 2 且列表查不到）；相同 roleKey 重复创建被唯一约束挡住、库里仍 1 条；同一 body 连续 PUT 两次数据不变 |
+| 并发 | 1 | `threading.Barrier` 让 10 线程同一刻提交同一请求，实测插入 9 条重复角色（`xfail`，见下） |
+| 跨接口链路 | 1 | 建空权限角色 → 建用户挂角色 → 该用户登录后访问 403；给角色加菜单权限后**同一 token** 立即 200；撤销后又变 403 |
 
 ## 已知缺陷（用例标记为 xfail）
 
@@ -80,6 +84,7 @@ pytest test_user.py::test_delete_user
 | `GET /system/role/list` | `pageNum=-1` 未校验，按默认值返回全量数据（code 200） | 分页参数越界无反馈 |
 | `GET /system/role/list` | `pageSize=100000` 无上限校验 | 大表场景下可被拖慢或内存放大 |
 | `GET /system/role/list` | `pageSize=0` 时 `total=2` 但 `rows` 为空 | 分页契约不一致 |
+| `POST /system/role` | 同一 roleKey 并发 10 次提交，9 次成功入库（`sys_role` 表无唯一索引，业务层 check-then-act 判重非原子） | 产生同名重复角色，后续按角色授权时权限范围翻倍 |
 
 ## 设计说明
 
@@ -120,7 +125,7 @@ CI 分两层，一层验证代码本身，一层验证真实系统。
 | 作业 | 做什么 | 耗时 | 能发现什么 | 发现不了什么 |
 |---|---|---|---|---|
 | `check` | `compileall` 语法检查 + `pytest --collect-only` 用例收集 | 约 20 秒 | 语法错误、fixture 名对不上、参数化写错 | 接口行为变化 |
-| `integration` | 起 MySQL 8 + Redis 7，现场编译并启动若依，跑全部 33 条用例 | 约 2 分钟（Maven 有缓存） | 业务回归、接口契约变更 | 前端问题、性能问题 |
+| `integration` | 起 MySQL 8 + Redis 7，现场编译并启动若依，跑全部 35 条用例 | 约 2 分钟（Maven 有缓存） | 业务回归、接口契约变更 | 前端问题、性能问题 |
 
 `integration` 的执行链路：
 

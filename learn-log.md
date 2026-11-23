@@ -302,3 +302,26 @@ for t in threads: t.join()              # 再全部等落地
 **明天要写的用例** `test_role_permission_chain.py`：一条，五步，用新用户自己的 token（admin 恒有权限，测不出 403）。
 坑：cleanup 先删用户再删角色；`POST /system/user` 需 `deptId=103`、`roleIds=[rid]`；menuId 别硬编码，按 `perms=="system:user:list"` 从 `/system/menu/list` 动态查。
 验收：35 项 = 30 passed + 5 xfailed。
+
+## 2026-11-23 · 跨接口链路用例完成（35 项：30 passed + 5 xfailed）
+
+`test_role_permission_chain.py` 一条用例走完：建空权限角色 → 建用户挂角色 → 该用户登录 → 403 → 给角色加 `menuIds=[100]` → **同一 token 立即 200** → 撤销 → 403。
+
+**这条用例的价值**：同一个接口在一条链路里出现三种预期（403 → 200 → 403），能证明权限是每次请求实时判定的，不是缓存到 token 里。
+
+**写这条撞的坑（按顺序）**
+1. `request.post(...)` —— `request` 是 pytest 的 finalizer fixture，没有 post 方法；要写 `requests`
+2. 用 `requests` 建角色/建用户没带 token → 401「认证失败」；**前置数据该用 `client`（admin），只有验权限那步才换身份**
+3. 登录 json 写 `"userName"` → 500「用户不存在/密码错误」，必须是 `"username"`
+4. 建用户漏 `nickName` → 500 `Field 'nick_name' doesn't have a default value`
+5. `"userNmae"`、`"passwprd"` 拼错 → 字段丢失
+6. `client.request(...).json()["rows"]` → `client.request` 已返回 dict，没有 `.json()`
+7. `PUT /system/role` 全量更新 → 必须 `{**detail, "menuIds": [100]}`
+8. 加了「用户管理」权限(menuId 100) 却去测 `/system/role/list` → 权限不匹配，403 是必然
+9. 最后一条断言写成 `/system/role/list` → **假通过**：该接口本来就没权限，撤回权限前后都是 403，区分不出状态变化
+
+**规则沉淀**
+- 一个接口在链路里先 403、再 200、再 403，才是有效断言；一直 403 的断言什么都证明不了
+- 身份划分：准备数据用 admin 的 `client`，验证权限边界用目标用户的 `ApiClient(token=...)`
+- 长字典先赋值给变量并 `print` 一次再发，能挡住绝大多数字段名拼错
+- `menuIds` 对应菜单：100=用户管理(system:user:list)；要测别的接口就得先查 `/system/menu/list` 拿对应 menuId
