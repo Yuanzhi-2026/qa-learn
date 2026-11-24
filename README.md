@@ -76,6 +76,9 @@ pytest test_user.py::test_delete_user
 
 ## 已知缺陷（用例标记为 xfail）
 
+> 完整缺陷报告（含复现步骤、根因分析、修复建议、证据）：[`docs/缺陷报告.md`](docs/缺陷报告.md)
+
+
 以下行为经实测确认与合理预期不符，用例断言写的是**期望值**并用 `@pytest.mark.xfail(strict=True)` 标记，缺陷修复后用例会转为失败以提醒更新。
 
 | 接口 | 现象 | 影响 |
